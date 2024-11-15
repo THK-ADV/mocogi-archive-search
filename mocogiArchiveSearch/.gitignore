@@ -1,0 +1,9 @@
+*.yaml
+*.yml
+# JetBrains IDEs
+.idea/
+
+# VSCode
+.vscode/
+
+__pycache__/
