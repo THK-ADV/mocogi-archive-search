@@ -5,7 +5,7 @@ import unittest
 import base64
 from gitlab import AKGitlab
 from gitlab_api import GitlabAPI
-
+import yaml
 # ----------------------------------------------------------------------------------------------------------------------
 # Classes
 # ----------------------------------------------------------------------------------------------------------------------
@@ -83,6 +83,50 @@ class GitlabRestAPIClientUnitTest(unittest.TestCase):
       print(module)
       decoded_content = base64.b64decode(module['content']).decode('utf-8')
       print(decoded_content)
+
+  def test_012_get_all_modules_with_study_programs(self):
+    project_id = 3020
+
+    # Abrufen aller Moduldateien
+    all_module_files = self.gitlab.files.get_project_files(project_id=project_id, path="modules")
+
+    for file in all_module_files:
+      # Falls `name` der richtige Schlüssel ist
+      file_key = "name"  # Passe diesen Schlüssel an, falls es nicht `name` ist.
+
+      # Sicherstellen, dass der Schlüssel existiert
+      if file_key not in file:
+        print(f"Warning: Key '{file_key}' not found in file metadata. Skipping.")
+        continue
+
+      # Abrufen und Dekodieren des Inhalts
+      module = self.gitlab.files.get_file_content(project_id=project_id, file_path=file['path'])
+      decoded_content = base64.b64decode(module['content']).decode('utf-8')
+
+      print(f"Decoded content for module {file[file_key]}:\n{decoded_content}\n{'-' * 50}")
+
+      try:
+        # Entferne den YAML-Header-Fehler (---v1.0s)
+        if decoded_content.startswith("---v1.0s"):
+          decoded_content = decoded_content.replace("---v1.0s", "---", 1)
+
+        # Überprüfen, ob "---" im Inhalt enthalten ist
+        if "---" not in decoded_content:
+          print(f"Warning: No valid YAML delimiter found for module {file[file_key]}. Skipping.")
+          continue
+
+        # Extrahiere YAML-Bereich
+        yaml_content = yaml.safe_load(decoded_content.split('---', 2)[1])
+
+        # Extrahiere Studiengänge
+        study_programs = yaml_content.get('po_optional', [])
+        print(f"Study programs for module {file[file_key]}:")
+        for program in study_programs:
+          print(f"  - {program.get('study_program', 'Unknown')}")
+      except yaml.YAMLError as e:
+        print(f"Error parsing YAML for module {file[file_key]}: {e}")
+      except Exception as e:
+        print(f"Unexpected error for module {file[file_key]}: {e}")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
