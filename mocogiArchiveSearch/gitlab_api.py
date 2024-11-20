@@ -105,7 +105,7 @@ class GitlabAPI(RestAPIClient):
             }
             return self.api.get_json(url=url, params=params, data={})
 
-    def __init__(self, config_file: str = "config.yaml"):
+    def __init__(self, config_file: str = "config.yml"):
         with open(config_file, "r") as file:
             config = yaml.safe_load(file)
 
