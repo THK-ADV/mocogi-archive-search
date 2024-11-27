@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------------------------------------------------------------
 # Imports
 # ----------------------------------------------------------------------------------------------------------------------
+import re
 import unittest
 import base64
 from gitlab import AKGitlab
@@ -85,48 +86,103 @@ class GitlabRestAPIClientUnitTest(unittest.TestCase):
       print(decoded_content)
 
   def test_012_get_all_modules_with_study_programs(self):
-    project_id = 3020
+      """
+      Test fetching and cleaning module content and extracting study programs.
+      """
 
-    # Abrufen aller Moduldateien
-    all_module_files = self.gitlab.files.get_project_files(project_id=project_id, path="modules")
+      def clean_yaml_content(content):
+          """
+          Cleans and prepares YAML content:
+          - Replaces invalid headers.
+          - Handles duplicated colons and malformed keys.
+          - Strips invalid lines.
+          """
+          if content.startswith("---v1.0s"):
+              content = content.replace("---v1.0s", "---", 1)
+          elif content.startswith("---v1s"):
+              content = content.replace("---v1s", "---", 1)
 
-    for file in all_module_files:
-      # Falls `name` der richtige Schlüssel ist
-      file_key = "name"  # Passe diesen Schlüssel an, falls es nicht `name` ist.
+          # Replace tabs with spaces
+          content = content.replace("\t", "  ")
 
-      # Sicherstellen, dass der Schlüssel existiert
-      if file_key not in file:
-        print(f"Warning: Key '{file_key}' not found in file metadata. Skipping.")
-        continue
+          # Fix malformed colons
+          content = re.sub(r":\s*:", ":", content)
 
-      # Abrufen und Dekodieren des Inhalts
-      module = self.gitlab.files.get_file_content(project_id=project_id, file_path=file['path'])
-      decoded_content = base64.b64decode(module['content']).decode('utf-8')
+          # Remove invalid lines
+          content = re.sub(r"^\s*:\s*$", "", content, flags=re.MULTILINE)
 
-      print(f"Decoded content for module {file[file_key]}:\n{decoded_content}\n{'-' * 50}")
+          # Split lines and process further
+          lines = content.split("\n")
+          cleaned_lines = []
+          for line in lines:
+              if line.count(":") > 1 and not line.strip().startswith("-"):
+                  parts = line.split(":")
+                  line = ":".join(parts[:2])  # Fix duplicated keys
+              cleaned_lines.append(line)
+
+          return "\n".join(cleaned_lines).strip()
+
+      project_id = 3020
+      error_log = []
 
       try:
-        # Entferne den YAML-Header-Fehler (---v1.0s)
-        if decoded_content.startswith("---v1.0s"):
-          decoded_content = decoded_content.replace("---v1.0s", "---", 1)
+          # Retrieve all module files
+          all_module_files = self.gitlab.files.get_project_files(project_id=project_id, path="modules")
 
-        # Überprüfen, ob "---" im Inhalt enthalten ist
-        if "---" not in decoded_content:
-          print(f"Warning: No valid YAML delimiter found for module {file[file_key]}. Skipping.")
-          continue
+          for file in all_module_files:
+              file_name = file.get("name", "unknown")
 
-        # Extrahiere YAML-Bereich
-        yaml_content = yaml.safe_load(decoded_content.split('---', 2)[1])
+              try:
+                  # Fetch and decode content
+                  module = self.gitlab.files.get_file_content(project_id=project_id, file_path=file['path'])
+                  decoded_content = base64.b64decode(module['content']).decode('utf-8')
 
-        # Extrahiere Studiengänge
-        study_programs = yaml_content.get('po_optional', [])
-        print(f"Study programs for module {file[file_key]}:")
-        for program in study_programs:
-          print(f"  - {program.get('study_program', 'Unknown')}")
-      except yaml.YAMLError as e:
-        print(f"Error parsing YAML for module {file[file_key]}: {e}")
+                  print(f"Decoded content for module {file_name}:\n{decoded_content}\n{'-' * 50}")
+
+                  # Clean the content
+                  cleaned_content = clean_yaml_content(decoded_content)
+
+                  # Validate YAML delimiter
+                  if "---" not in cleaned_content:
+                      print(f"Warning: No valid YAML delimiter found for module {file_name}. Skipping.")
+                      error_log.append((file_name, "No valid YAML delimiter found"))
+                      continue
+
+                  # Extract YAML content
+                  yaml_parts = cleaned_content.split('---')
+                  if len(yaml_parts) < 2:
+                      print(f"Warning: Malformed YAML structure in module {file_name}. Skipping.")
+                      error_log.append((file_name, "Malformed YAML structure"))
+                      continue
+
+                  yaml_block = yaml_parts[1]
+
+                  try:
+                      # Parse YAML content
+                      yaml_content = yaml.safe_load(yaml_block)
+
+                      # Extract study programs
+                      study_programs = yaml_content.get('po_optional', []) + yaml_content.get('po_mandatory', [])
+                      print(f"Study programs for module {file_name}:")
+                      for program in study_programs:
+                          print(f"  - {program.get('study_program', 'Unknown')}")
+                  except yaml.YAMLError as e:
+                      print(f"Error parsing YAML for module {file_name}: {e}")
+                      error_log.append((file_name, f"YAML parsing error: {e}"))
+                      continue
+
+              except Exception as e:
+                  print(f"Unexpected error for module {file_name}: {e}")
+                  error_log.append((file_name, f"Unexpected error: {e}"))
+
+          # Log error summary
+          if error_log:
+              print("\nSummary of problematic modules:")
+              for module_name, error in error_log:
+                  print(f"Module: {module_name}, Error: {error}")
+
       except Exception as e:
-        print(f"Unexpected error for module {file[file_key]}: {e}")
+          print(f"Error while processing modules: {e}")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
