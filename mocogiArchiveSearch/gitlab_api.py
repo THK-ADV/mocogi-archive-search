@@ -96,12 +96,15 @@ class GitlabAPI(RestAPIClient):
             params = {"ref": ref}
             return self.api.get_json(url=url, params=params)
 
-        def get_project_files(self, project_id: int, path: str = "", ref: str = "main"):
+        def get_project_files(self, project_id: int, path: str = "", ref: str = "main",
+                              page: int = 0, per_page: int = 100):
             url = f"projects/{project_id}/repository/tree"
             params = {
                 "path": path,
                 "ref": ref,
-                "recursive": False
+                "recursive": False,
+                "page": page,
+                "per_page": per_page
             }
             return self.api.get_json(url=url, params=params, data={})
 

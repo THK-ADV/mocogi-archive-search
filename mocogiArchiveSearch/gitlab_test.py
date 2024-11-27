@@ -77,13 +77,33 @@ class GitlabRestAPIClientUnitTest(unittest.TestCase):
     print(response)
 
   def test_011_get_all_modules(self):
-    project_id = 3020
-    all_module_files = self.gitlab.files.get_project_files(project_id=project_id, path="modules")
-    for file in all_module_files:
-      module = self.gitlab.files.get_file_content(project_id=project_id, file_path=f"{file['path']}")
-      print(module)
-      decoded_content = base64.b64decode(module['content']).decode('utf-8')
-      print(decoded_content)
+      project_id = 3020
+      path = "modules"
+      all_module_files = []
+      page = 1
+      per_page = 100  # Maximale Anzahl von Einträgen pro Anfrage (abhängig von GitLab-API)
+
+      while True:
+          # Abrufen der Dateien für die aktuelle Seite
+          module_files = self.gitlab.files.get_project_files(
+              project_id=project_id,
+              path=path,
+              ref="main",
+              page=page, per_page=per_page
+          )
+
+          # Breche die Schleife ab, wenn keine weiteren Dateien vorhanden sind
+          if not module_files:
+              break
+
+          # Füge die Ergebnisse zur Liste hinzu
+          all_module_files.extend(module_files)
+          page += 1
+
+      print(f"Total modules fetched: {len(all_module_files)}")
+      for file in all_module_files:
+          module = self.gitlab.files.get_file_content(project_id=project_id, file_path=f"{file['path']}")
+          print(module)
 
   def test_012_get_all_modules_with_study_programs(self):
       """

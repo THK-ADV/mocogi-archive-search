@@ -90,8 +90,8 @@ class AKGitlab:
       self.api = api
       self.data = data
 
-    def get_project_files(self, project_id: int, path: str = "", ref: str = "main"):
-      return self.api.files.get_project_files(project_id=project_id, path=path, ref=ref)
+    def get_project_files(self, project_id: int, path: str = "", ref: str = "main", page: int = 0, per_page: int = 100):
+      return self.api.files.get_project_files(project_id=project_id, path=path, ref=ref, page=page, per_page=per_page)
 
     def get_file_content(self, project_id: int, file_path: str, ref: str = "main"):
       return self.api.files.get_file_content(project_id=project_id, file_path=file_path, ref=ref)
